@@ -35,7 +35,7 @@ jobs:
             dockerfile: ./gcp/Dockerfile
             context: ./gcp
           - app: main
-            dockerfile: ./main/Dockerfile
+            dockerfile: ./Dockerfile
             context: ./main
       fail-fast: false
 

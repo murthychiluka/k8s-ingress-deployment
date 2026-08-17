@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/murthychiluka/k8s-ingress-deployment.git
+    targetRevision: main
+    path: k8s-files
+    directory:
+      include: aws.yml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: azure-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/murthychiluka/k8s-ingress-deployment.git
+    targetRevision: main
+    path: k8s-files
+    directory:
+      include: azure.yml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gcp-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/murthychiluka/k8s-ingress-deployment.git
+    targetRevision: main
+    path: k8s-files
+    directory:
+      include: gcp.yml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: main-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/murthychiluka/k8s-ingress-deployment.git
+    targetRevision: main
+    path: k8s-files
+    directory:
+      include: main.yml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

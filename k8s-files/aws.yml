@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: aws
-          image: 835175800251.dkr.ecr.us-east-1.amazonaws.com/aws:9e6622904c44a08e51b3b5faab7307bbe58bccd5
+          image: 835175800251.dkr.ecr.us-east-1.amazonaws.com/aws:86ddb3ad35a45329004de9930ee1d7a4c3409903
           imagePullPolicy: Always
 
           ports:

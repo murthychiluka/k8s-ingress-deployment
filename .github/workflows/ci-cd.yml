@@ -52,8 +52,8 @@ jobs:
           # Main application
           # Dockerfile and index.html are in repository root
           - app: main
-            dockerfile: ./Dockerfile
-            context: .
+            dockerfile: .main/Dockerfile
+            context: ./main
 
     steps:
 

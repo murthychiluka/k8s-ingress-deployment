@@ -1,6 +1,6 @@
 # .github/workflows/ci-cd.yml
 
-name: Build Push Deploy - 4 Apps
+name: CI - Build Push and Update Manifests
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
   workflow_dispatch:
 
-# Allow GitHub Actions to commit and push changes
+# Required for GitHub Actions to commit updated manifests
 permissions:
   contents: write
 
@@ -20,10 +20,11 @@ env:
 jobs:
 
   # ============================================================
-  # JOB 1: BUILD AND PUSH ALL 4 DOCKER IMAGES
+  # JOB 1: BUILD AND PUSH ALL APPLICATION IMAGES
   # ============================================================
 
   build-and-push:
+
     name: Build & Push - ${{ matrix.app }}
 
     runs-on: ubuntu-latest
@@ -34,23 +35,18 @@ jobs:
       matrix:
         include:
 
-          # AWS application
           - app: aws
             dockerfile: ./aws/Dockerfile
             context: ./aws
 
-          # Azure application
           - app: azure
             dockerfile: ./azure/Dockerfile
             context: ./azure
 
-          # GCP application
           - app: gcp
             dockerfile: ./gcp/Dockerfile
             context: ./gcp
 
-          # Main application
-          # Dockerfile and index.html are in repository root
           - app: main
             dockerfile: ./main/Dockerfile
             context: ./main
@@ -66,129 +62,7 @@ jobs:
 
 
       # ----------------------------------------------------------
-      # Show build information
-      # ----------------------------------------------------------
-
-      - name: Show Build Info
-        run: |
-          echo "=========================================="
-          echo "Application : ${{ matrix.app }}"
-          echo "Dockerfile  : ${{ matrix.dockerfile }}"
-          echo "Context     : ${{ matrix.context }}"
-          echo "Image Tag   : ${{ env.IMAGE_TAG }}"
-          echo "=========================================="
-
-
-      # ----------------------------------------------------------
-      # Configure AWS
-      # ----------------------------------------------------------
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-
-      # ----------------------------------------------------------
-      # Login to Amazon ECR
-      # ----------------------------------------------------------
-
-      - name: Login to ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-
-      # ----------------------------------------------------------
-      # Build Docker image
-      # ----------------------------------------------------------
-
-      - name: Build Docker Image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-
-        run: |
-          echo "Building ${{ matrix.app }}..."
-
-          docker build \
-            -f "${{ matrix.dockerfile }}" \
-            -t "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}" \
-            -t "$ECR_REGISTRY/${{ matrix.app }}:latest" \
-            "${{ matrix.context }}"
-
-          echo "Docker image built successfully."
-
-
-      # ----------------------------------------------------------
-      # Push image to ECR
-      # ----------------------------------------------------------
-
-      - name: Push to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-
-        run: |
-          echo "Pushing ${{ matrix.app }}..."
-
-          docker push \
-            "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}"
-
-          docker push \
-            "$ECR_REGISTRY/${{ matrix.app }}:latest"
-
-          echo "=========================================="
-          echo "Image pushed successfully"
-          echo "Image: $ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}"
-          echo "=========================================="
-
-
-      # ----------------------------------------------------------
-      # Cleanup local Docker images
-      # ----------------------------------------------------------
-
-      - name: Cleanup Docker Images
-        if: always()
-
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-
-        run: |
-          docker rmi \
-            "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}" \
-            || true
-
-          docker rmi \
-            "$ECR_REGISTRY/${{ matrix.app }}:latest" \
-            || true
-
-
-  # ============================================================
-  # JOB 2: UPDATE KUBERNETES MANIFESTS
-  # ============================================================
-
-  update-manifests:
-    name: Update Kubernetes Manifests
-
-    needs: build-and-push
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      # ----------------------------------------------------------
-      # Checkout repository
-      #
-      # No PAT required.
-      # GITHUB_TOKEN receives contents: write from permissions above.
-      # ----------------------------------------------------------
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------------------------
-      # Configure AWS
+      # Configure AWS credentials
       # ----------------------------------------------------------
 
       - name: Configure AWS Credentials
@@ -209,20 +83,99 @@ jobs:
 
 
       # ----------------------------------------------------------
-      # Update Kubernetes YAML files
-      #
-      # Actual files:
-      #
-      # k8s-files/aws.yml
-      # k8s-files/azure.yml
-      # k8s-files/gcp.yml
-      # k8s-files/main.yml
+      # Build Docker image
       # ----------------------------------------------------------
 
-      - name: Update Kubernetes Manifests
+      - name: Build Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
 
+        run: |
+
+          echo "=========================================="
+          echo "Application : ${{ matrix.app }}"
+          echo "Dockerfile  : ${{ matrix.dockerfile }}"
+          echo "Context     : ${{ matrix.context }}"
+          echo "Image Tag   : ${{ env.IMAGE_TAG }}"
+          echo "=========================================="
+
+          docker build \
+            -f "${{ matrix.dockerfile }}" \
+            -t "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}" \
+            -t "$ECR_REGISTRY/${{ matrix.app }}:latest" \
+            "${{ matrix.context }}"
+
+
+      # ----------------------------------------------------------
+      # Push image to ECR
+      # ----------------------------------------------------------
+
+      - name: Push to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+
+        run: |
+
+          docker push \
+            "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}"
+
+          docker push \
+            "$ECR_REGISTRY/${{ matrix.app }}:latest"
+
+          echo "=========================================="
+          echo "Successfully pushed:"
+          echo "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}"
+          echo "=========================================="
+
+
+      # ----------------------------------------------------------
+      # Cleanup
+      # ----------------------------------------------------------
+
+      - name: Cleanup Docker Images
+        if: always()
+
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+
+        run: |
+
+          docker rmi \
+            "$ECR_REGISTRY/${{ matrix.app }}:${{ env.IMAGE_TAG }}" \
+            || true
+
+          docker rmi \
+            "$ECR_REGISTRY/${{ matrix.app }}:latest" \
+            || true
+
+
+  # ============================================================
+  # JOB 2: UPDATE KUBERNETES MANIFESTS
+  # ============================================================
+
+  update-manifests:
+
+    name: Update Kubernetes Manifests
+
+    needs: build-and-push
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------------------------
+      # Checkout repository
+      # ----------------------------------------------------------
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------------------
+      # Update image tags
+      # ----------------------------------------------------------
+
+      - name: Update Kubernetes Manifests
         run: |
 
           echo "=========================================="
@@ -241,71 +194,38 @@ jobs:
             echo "Manifest    : ${YAML_PATH}"
             echo "------------------------------------------"
 
-            # Check YAML file
             if [ ! -f "$YAML_PATH" ]; then
               echo "ERROR: $YAML_PATH does not exist!"
               exit 1
             fi
 
-            echo ""
-            echo "Image before update:"
+            echo "Before:"
             grep "image:" "$YAML_PATH" || true
 
-            # Update image
             sed -i \
-              "s|image: .*${APP}:.*|image: ${ECR_REGISTRY}/${APP}:${{ env.IMAGE_TAG }}|g" \
+              "s|image: .*${APP}:.*|image: 835175800251.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP}:${IMAGE_TAG}|g" \
               "$YAML_PATH"
 
-            echo ""
-            echo "Image after update:"
-            grep "image:" "$YAML_PATH" || true
-
-            echo ""
-            echo "${APP} manifest updated successfully."
-
-          done
-
-
-      # ----------------------------------------------------------
-      # Display final image values
-      # ----------------------------------------------------------
-
-      - name: Show Updated Manifests
-        run: |
-
-          echo "=========================================="
-          echo "FINAL IMAGE VALUES"
-          echo "=========================================="
-
-          for APP in aws azure gcp main
-          do
-
-            YAML_PATH="k8s-files/${APP}.yml"
-
-            echo ""
-            echo "========== ${YAML_PATH} =========="
-
+            echo "After:"
             grep "image:" "$YAML_PATH" || true
 
           done
 
 
       # ----------------------------------------------------------
-      # Commit and push changes to GitHub
+      # Commit and push manifest changes
       # ----------------------------------------------------------
 
-      - name: Commit and Push
+      - name: Commit and Push Manifests
         run: |
 
           git config user.name "GitHub Actions Bot"
           git config user.email "github-actions@github.com"
 
-          echo "Adding Kubernetes manifests..."
-
-          git add k8s-files/*.yml
-
-          echo ""
-          echo "Checking for changes..."
+          git add k8s-files/aws.yml
+          git add k8s-files/azure.yml
+          git add k8s-files/gcp.yml
+          git add k8s-files/main.yml
 
           if git diff --staged --quiet
           then
@@ -314,193 +234,13 @@ jobs:
 
           else
 
-            git commit -m "ci: update Kubernetes images to ${{ env.IMAGE_TAG }} [skip ci]"
-
-            echo ""
-            echo "Pushing changes to GitHub..."
+            git commit \
+              -m "ci: update Kubernetes images to ${IMAGE_TAG} [skip ci]"
 
             git push origin main
 
-            echo ""
-            echo "Kubernetes manifests pushed successfully."
+            echo "=========================================="
+            echo "Manifests pushed successfully."
+            echo "=========================================="
 
           fi
-
-
-  # ============================================================
-  # JOB 3: DEPLOY THROUGH ARGOCD
-  # ============================================================
-
-  deploy:
-    name: Deploy via ArgoCD
-
-    needs: update-manifests
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-      # ----------------------------------------------------------
-      # Checkout repository
-      # ----------------------------------------------------------
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------------------------
-      # Configure AWS
-      # ----------------------------------------------------------
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-
-      # ----------------------------------------------------------
-      # Install kubectl
-      # ----------------------------------------------------------
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: latest
-
-
-      # ----------------------------------------------------------
-      # Configure kubectl for EKS
-      # ----------------------------------------------------------
-
-      - name: Configure kubectl for EKS
-        run: |
-
-          aws eks update-kubeconfig \
-            --region "${{ env.AWS_REGION }}" \
-            --name "${{ secrets.EKS_CLUSTER_NAME }}"
-
-          echo "Testing EKS connection..."
-
-          kubectl get nodes
-
-          echo "kubectl is ready."
-
-
-      # ----------------------------------------------------------
-      # Install ArgoCD CLI
-      # ----------------------------------------------------------
-
-      - name: Install ArgoCD CLI
-        run: |
-
-          curl -sSL -o argocd \
-            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-
-          chmod +x argocd
-
-          sudo mv argocd /usr/local/bin/argocd
-
-          argocd version --client
-
-          echo "ArgoCD CLI installed."
-
-
-      # ----------------------------------------------------------
-      # Login to ArgoCD
-      # ----------------------------------------------------------
-
-      - name: Login to ArgoCD
-        run: |
-
-          argocd login \
-            "${{ secrets.ARGOCD_SERVER }}" \
-            --username "${{ secrets.ARGOCD_USERNAME }}" \
-            --password "${{ secrets.ARGOCD_PASSWORD }}" \
-            --insecure \
-            --grpc-web
-
-          echo "Successfully logged in to ArgoCD."
-
-
-      # ----------------------------------------------------------
-      # Sync all ArgoCD applications
-      # ----------------------------------------------------------
-
-      - name: Sync All ArgoCD Apps
-        run: |
-
-          for APP in aws azure gcp main
-          do
-
-            echo ""
-            echo "=========================================="
-            echo "Syncing ${APP}-app"
-            echo "=========================================="
-
-            argocd app sync "${APP}-app" \
-              --force \
-              --prune \
-              --timeout 180 \
-              || echo "${APP}-app sync failed"
-
-          done
-
-
-      # ----------------------------------------------------------
-      # Wait for applications to become healthy
-      # ----------------------------------------------------------
-
-      - name: Wait for All Applications
-        run: |
-
-          for APP in aws azure gcp main
-          do
-
-            echo ""
-            echo "Waiting for ${APP}-app..."
-
-            argocd app wait "${APP}-app" \
-              --health \
-              --timeout 300 \
-              || echo "${APP}-app is not healthy yet"
-
-          done
-
-
-      # ----------------------------------------------------------
-      # Final deployment status
-      # ----------------------------------------------------------
-
-      - name: Final Status
-        if: always()
-
-        run: |
-
-          echo ""
-          echo "=========================================="
-          echo "ARGOCD DEPLOYMENT STATUS"
-          echo "=========================================="
-
-          for APP in aws azure gcp main
-          do
-
-            echo ""
-            echo "========== ${APP}-app =========="
-
-            argocd app get "${APP}-app" \
-              --output wide \
-              2>/dev/null \
-              || echo "${APP}-app not found"
-
-          done
-
-          echo ""
-          echo "=========================================="
-          echo "KUBERNETES PODS"
-          echo "=========================================="
-
-          kubectl get pods --all-namespaces \
-            | grep -E "aws|azure|gcp|main" \
-            || true

@@ -1,4 +1,4 @@
-# Deploy HTTPS Application on Amazon EKS using AWS Load Balancer Controller and ACM
+# Deploy HTTPS Application on Amazon EKS using AWS Load Balancer Controller and ACM#
 
 This guide explains how to expose an application running on Amazon EKS using an AWS Application Load Balancer (ALB) with HTTPS enabled through AWS Certificate Manager (ACM).
 

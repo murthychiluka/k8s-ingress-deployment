@@ -203,7 +203,7 @@ jobs:
             grep "image:" "$YAML_PATH" || true
 
             sed -i \
-              "s|image: .*${APP}:.*|image: 835175800251.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP}:${IMAGE_TAG}|g" \
+              "s|image: .*${APP}:.*|image: 851725468573.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP}:${IMAGE_TAG}|g" \
               "$YAML_PATH"
 
             echo "After:"
